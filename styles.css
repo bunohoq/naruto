@@ -1,0 +1,187 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Arial', 'Noto Sans KR', sans-serif;
+  background: radial-gradient(circle at center, #1a1a2e 0%, #05050c 100%);
+  color: white;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+h1 {
+  text-align: center;
+  font-size: 2.4rem;
+  background: linear-gradient(45deg, #ff6b35, #f7931e, #ffdd00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+}
+
+.subtitle {
+  text-align: center;
+  color: #888;
+  margin-bottom: 20px;
+}
+
+.jutsu-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.jutsu-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 14px;
+  border-radius: 10px;
+  text-align: center;
+  transition: all 0.25s;
+}
+
+.jutsu-card.charging {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.jutsu-card.active {
+  background: rgba(255, 120, 40, 0.25);
+  border-color: #ff6b35;
+  box-shadow: 0 0 25px rgba(255, 107, 53, 0.6);
+  transform: translateY(-2px);
+}
+
+.jutsu-name {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.jutsu-hint {
+  font-size: 0.78rem;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+
+.jutsu-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.jutsu-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ff6b35, #ffdd00);
+  transition: width 0.1s linear;
+}
+
+.video-container {
+  position: relative;
+  background: #000;
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+#video {
+  display: none;
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#jutsu-name-display {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  font-size: 2.2rem;
+  font-weight: bold;
+  text-shadow: 0 0 20px currentColor, 0 0 40px currentColor;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#jutsu-name-display.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.status {
+  margin-top: 14px;
+  text-align: center;
+  color: #aaa;
+  font-size: 0.95rem;
+}
+
+.tip {
+  margin-top: 10px;
+  text-align: center;
+  color: #555;
+  font-size: 0.78rem;
+}
+
+.tip code {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #ffb380;
+}
+
+@media (max-width: 900px) {
+  .jutsu-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .jutsu-list {
+    grid-template-columns: 1fr;
+  }
+  h1 {
+    font-size: 1.8rem;
+  }
+}
+
+/* 아이콘 컨테이너 스타일 */
+.jutsu-icon {
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 이미지 크기 조절 */
+.jutsu-icon img {
+  width: 50px;       /* 이미지 가로 크기 */
+  height: 50px;      /* 이미지 세로 크기 */
+  object-fit: contain; /* 비율 깨지지 않게 맞춤 */
+  opacity: 0.8;      /* 약간 투명하게 해서 UI와 어울리게 */
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+/* 기술이 충전 중이거나 발동될 때 이미지가 살짝 커지고 밝아지는 효과 */
+.jutsu-card.charging .jutsu-icon img,
+.jutsu-card.active .jutsu-icon img {
+  transform: scale(1.1);
+  opacity: 1;
+}

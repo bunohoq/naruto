@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo view:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(brew upgrade:*)"
+    ]
+  }
+}

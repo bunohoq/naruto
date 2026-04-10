@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🍥 나루토 결인 인술</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🍥 나루토 결인 인술</h1>
+  <p class="subtitle">손모양으로 인술을 펼쳐보자!</p>
+
+  <div class="jutsu-list">
+    <div class="jutsu-card" data-jutsu="rasengan">
+      <div class="jutsu-icon">
+        <img src="images/rasengan_hand.png" alt="라센간 손모양" onerror="this.style.display='none'">
+      </div>
+      <div class="jutsu-name">螺旋丸 라센간</div>
+      <div class="jutsu-hint">두 손바닥 펴서 가까이</div>
+      <div class="jutsu-bar"><div class="jutsu-bar-fill"></div></div>
+    </div>
+
+    <div class="jutsu-card" data-jutsu="chidori">
+      <div class="jutsu-icon">
+        <img src="images/chidori_hand.png" alt="치도리 손모양" onerror="this.style.display='none'">
+      </div>
+      <div class="jutsu-name">千鳥 치도리</div>
+      <div class="jutsu-hint">한 손 펴고 아래쪽으로</div>
+      <div class="jutsu-bar"><div class="jutsu-bar-fill"></div></div>
+    </div>
+
+    <div class="jutsu-card" data-jutsu="fireball">
+      <div class="jutsu-icon">
+        <img src="images/fireball_hand.png" alt="호화멸각 손모양" onerror="this.style.display='none'">
+      </div>
+      <div class="jutsu-name">火遁 호화멸각</div>
+      <div class="jutsu-hint">호랑이 결인 (양 검지만 위로)</div>
+      <div class="jutsu-bar"><div class="jutsu-bar-fill"></div></div>
+    </div>
+
+    <div class="jutsu-card" data-jutsu="bunshin">
+      <div class="jutsu-icon">
+        <img src="images/bunshin_hand.png" alt="분신술 손모양" onerror="this.style.display='none'">
+      </div>
+      <div class="jutsu-name">影分身 분신술</div>
+      <div class="jutsu-hint">양손 검지+중지만 펴기 (✌✌)</div>
+      <div class="jutsu-bar"><div class="jutsu-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <div class="video-container">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="jutsu-name-display"></div>
+  </div>
+
+  <div class="status" id="status">카메라 준비 중...</div>
+  <p class="tip">Tip: <code>python3 -m http.server 8000</code> 로 실행 후 <code>http://localhost:8000</code> 접속</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
