@@ -93,13 +93,16 @@ function detectJutsu(right, left) {
     }
   }
 
-  // 치도리: 한 손만, 전부 펴고, 몸 아래쪽에 위치
+  // 치도리: 한 손만, 검지~소지 전부 펴고, 엄지는 접고, 손끝이 아래를 향하고, 화면 많이 아래쪽
   const only = (right && !left) ? right : (left && !right) ? left : null;
   if (only) {
     const s = fingerStates(only);
     const allOut = s.index && s.middle && s.ring && s.pinky;
+    const thumbIn = !s.thumb;
     const pc = palmCenter(only);
-    if (allOut && pc.y > 0.55) return "chidori";
+    // 중지 끝이 중지 MCP보다 아래 → 손끝이 아래 방향
+    const fingersPointDown = only[12].y > only[9].y;
+    if (allOut && thumbIn && fingersPointDown && pc.y > 0.68) return "chidori";
   }
 
   return null;
@@ -338,82 +341,161 @@ function drawRasengan(cx, cy, radius, t) {
 }
 
 // ------------------------------------------------------
-// 시각 효과: 치도리
+// 시각 효과: 치도리 (강화판)
 // ------------------------------------------------------
-function drawLightningBolt(x0, y0, angle, length, branchDepth) {
-  const segs = 8;
-  const jitter = length * 0.35;
-  let px = x0, py = y0;
-  const points = [[px, py]];
+function drawLightningBolt(x0, y0, angle, length, branchDepth, alpha = 1) {
+  const segs = 10;
+  const jitter = length * 0.38;
+  const points = [[x0, y0]];
   for (let j = 1; j <= segs; j++) {
     const r = (length * j) / segs;
     const off = (Math.random() - 0.5) * jitter;
     const nx = x0 + Math.cos(angle) * r + Math.cos(angle + Math.PI / 2) * off;
     const ny = y0 + Math.sin(angle) * r + Math.sin(angle + Math.PI / 2) * off;
     points.push([nx, ny]);
-    px = nx; py = ny;
   }
   ctx.beginPath();
   ctx.moveTo(points[0][0], points[0][1]);
   points.slice(1).forEach(([x, y]) => ctx.lineTo(x, y));
+  ctx.globalAlpha = alpha;
   ctx.stroke();
+  ctx.globalAlpha = 1;
 
-  // 가지 번개
-  if (branchDepth > 0 && Math.random() < 0.5) {
-    const bi = Math.floor(points.length * 0.4 + Math.random() * points.length * 0.4);
+  // 재귀 가지 (최대 2단계)
+  if (branchDepth > 0 && Math.random() < 0.6) {
+    const bi = Math.floor(points.length * 0.3 + Math.random() * points.length * 0.45);
     const [bx, by] = points[bi];
-    const branchAngle = angle + (Math.random() - 0.5) * 1.2;
-    ctx.lineWidth *= 0.5;
-    drawLightningBolt(bx, by, branchAngle, length * 0.45, branchDepth - 1);
-    ctx.lineWidth *= 2;
+    const branchAngle = angle + (Math.random() - 0.5) * 1.4;
+    const prevLW = ctx.lineWidth;
+    ctx.lineWidth = prevLW * 0.5;
+    drawLightningBolt(bx, by, branchAngle, length * 0.5, branchDepth - 1, alpha * 0.75);
+    ctx.lineWidth = prevLW;
   }
 }
 
 function drawChidori(cx, cy, radius, t) {
   ctx.save();
 
-  // 넓은 전기 후광
-  const outerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.2);
-  outerGrad.addColorStop(0, "rgba(255,255,255,0.5)");
-  outerGrad.addColorStop(0.3, "rgba(150,210,255,0.35)");
-  outerGrad.addColorStop(0.7, "rgba(60,120,255,0.1)");
-  outerGrad.addColorStop(1, "rgba(0,0,120,0)");
-  ctx.fillStyle = outerGrad;
+  // 1. 원거리 전기장 플리커 (전체 배경 오라)
+  const flickerAlpha = 0.06 + 0.05 * Math.sin(t * 0.07 + Math.random() * 0.3);
+  const farGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 3.5);
+  farGrad.addColorStop(0,   `rgba(200,240,255,${flickerAlpha * 2})`);
+  farGrad.addColorStop(0.3, `rgba(100,200,255,${flickerAlpha})`);
+  farGrad.addColorStop(0.7, `rgba(40,120,255,${flickerAlpha * 0.4})`);
+  farGrad.addColorStop(1,   "rgba(0,0,120,0)");
+  ctx.fillStyle = farGrad;
   ctx.beginPath();
-  ctx.arc(cx, cy, radius * 2.2, 0, Math.PI * 2);
+  ctx.arc(cx, cy, radius * 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // 코어 플래시
-  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.6);
-  coreGrad.addColorStop(0, "rgba(255,255,255,1)");
-  coreGrad.addColorStop(0.5, "rgba(200,230,255,0.9)");
-  coreGrad.addColorStop(1, "rgba(100,180,255,0)");
-  ctx.fillStyle = coreGrad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius * 0.6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 번개 (18가닥 + 가지)
-  ctx.shadowColor = "#a5f3fc";
-  ctx.shadowBlur = 20;
-  const bolts = 18;
-  for (let i = 0; i < bolts; i++) {
-    const baseAngle = (Math.PI * 2 * i) / bolts + Math.sin(t * 0.025 + i * 1.3) * 0.4;
-    const length = radius * (1.4 + Math.random() * 1.1);
-    ctx.strokeStyle = i % 3 === 0 ? "rgba(255,255,255,1)" : "rgba(180,230,255,0.85)";
-    ctx.lineWidth = i % 3 === 0 ? 2.5 : 1.2;
-    drawLightningBolt(cx, cy, baseAngle, length, 1);
+  // 2. 충격파 맥동 링 (2개, 반대 위상)
+  for (let w = 0; w < 2; w++) {
+    const wPhase = w * Math.PI;
+    const wR = radius * (1.8 + 0.5 * Math.sin(t * 0.009 + wPhase));
+    const wAlpha = 0.12 + 0.08 * Math.sin(t * 0.009 + wPhase);
+    const wGrad = ctx.createRadialGradient(cx, cy, wR * 0.88, cx, cy, wR * 1.08);
+    wGrad.addColorStop(0,   "rgba(180,230,255,0)");
+    wGrad.addColorStop(0.5, `rgba(220,245,255,${wAlpha})`);
+    wGrad.addColorStop(1,   "rgba(180,230,255,0)");
+    ctx.fillStyle = wGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, wR * 1.08, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // 튀는 스파크
-  for (let i = 0; i < 8; i++) {
-    const angle = t * 0.03 * (i % 2 === 0 ? 1 : -1) + (i * Math.PI * 2) / 8;
-    const sr = radius * (0.3 + Math.sin(t * 0.04 + i) * 0.2);
+  // 3. 넓은 전기 후광
+  const outerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2.4);
+  outerGrad.addColorStop(0,   "rgba(255,255,255,0.5)");
+  outerGrad.addColorStop(0.25,"rgba(180,230,255,0.38)");
+  outerGrad.addColorStop(0.6, "rgba(60,130,255,0.12)");
+  outerGrad.addColorStop(1,   "rgba(0,0,120,0)");
+  ctx.fillStyle = outerGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 2.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. 코어 플래시 (맥동)
+  const coreFlicker = 0.85 + 0.15 * Math.sin(t * 0.045);
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.65 * coreFlicker);
+  coreGrad.addColorStop(0,   "rgba(255,255,255,1)");
+  coreGrad.addColorStop(0.3, "rgba(230,248,255,0.95)");
+  coreGrad.addColorStop(0.65,"rgba(140,210,255,0.7)");
+  coreGrad.addColorStop(1,   "rgba(80,160,255,0)");
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.65 * coreFlicker, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 5. 주 번개 (24가닥 — 홀짝 두께/색 교차, 랜덤 깜빡임)
+  ctx.shadowColor = "#bae6fd";
+  ctx.shadowBlur = 24;
+  const BOLTS = 24;
+  for (let i = 0; i < BOLTS; i++) {
+    const baseAngle = (Math.PI * 2 * i) / BOLTS
+        + Math.sin(t * 0.022 + i * 1.1) * 0.45;
+    const length = radius * (1.5 + Math.random() * 1.2);
+    const flicker = Math.random() > 0.15; // 15% 확률로 깜빡 꺼짐
+    if (!flicker) continue;
+
+    if (i % 3 === 0) {
+      ctx.strokeStyle = "rgba(255,255,255,1)";
+      ctx.lineWidth = 2.8;
+    } else if (i % 3 === 1) {
+      ctx.strokeStyle = "rgba(180,235,255,0.88)";
+      ctx.lineWidth = 1.6;
+    } else {
+      ctx.strokeStyle = "rgba(120,200,255,0.7)";
+      ctx.lineWidth = 1.0;
+    }
+    drawLightningBolt(cx, cy, baseAngle, length, 2);
+  }
+
+  // 6. 코로나 방전 — 짧은 표면 번개 (코어 주변)
+  ctx.shadowBlur = 12;
+  const CORONA = 10;
+  for (let i = 0; i < CORONA; i++) {
+    const angle = t * 0.025 * (i % 2 === 0 ? 1 : -1) + (i * Math.PI * 2) / CORONA;
+    const startR = radius * 0.55;
+    const sx = cx + Math.cos(angle) * startR;
+    const sy = cy + Math.sin(angle) * startR;
+    const coronaLen = radius * (0.35 + Math.random() * 0.3);
+    ctx.strokeStyle = "rgba(220,248,255,0.9)";
+    ctx.lineWidth = 1.2;
+    drawLightningBolt(sx, sy, angle + (Math.random() - 0.5) * 1.5, coronaLen, 1, 0.8);
+  }
+
+  // 7. 회전 스파크 입자 (2레이어)
+  ctx.shadowColor = "#e0f7ff";
+  ctx.shadowBlur = 16;
+  // 바깥 레이어
+  for (let i = 0; i < 10; i++) {
+    const angle = t * 0.028 * (i % 2 === 0 ? 1 : -1) + (i * Math.PI * 2) / 10;
+    const sr = radius * (0.75 + Math.sin(t * 0.035 + i * 0.8) * 0.15);
+    const size = 2.5 + Math.random() * 1.5;
     ctx.beginPath();
-    ctx.arc(cx + Math.cos(angle) * sr, cy + Math.sin(angle) * sr, 2.5, 0, Math.PI * 2);
+    ctx.arc(cx + Math.cos(angle) * sr, cy + Math.sin(angle) * sr, size, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.fill();
   }
+  // 안쪽 레이어 (반대 방향)
+  for (let i = 0; i < 7; i++) {
+    const angle = -t * 0.02 + (i * Math.PI * 2) / 7;
+    const sr = radius * (0.38 + Math.sin(t * 0.04 + i) * 0.08);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * sr, cy + Math.sin(angle) * sr, 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(200,240,255,0.85)";
+    ctx.fill();
+  }
+
+  // 8. 중심 극점 플래시
+  const flashA = 0.6 + 0.4 * Math.sin(t * 0.055);
+  const flashGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.2);
+  flashGrad.addColorStop(0, `rgba(255,255,255,${flashA})`);
+  flashGrad.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = flashGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.2, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }

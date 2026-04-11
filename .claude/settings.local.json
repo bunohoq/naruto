@@ -4,7 +4,8 @@
       "Bash(gh repo view:*)",
       "Bash(curl:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(brew upgrade:*)"
+      "Bash(brew upgrade:*)",
+      "Bash(node --check script.js)"
     ]
   }
 }
