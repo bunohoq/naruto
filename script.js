@@ -82,14 +82,21 @@ function detectJutsu(right, left) {
       }
     }
 
-    // 라센간: 양손 다 펴고, 한 손이 다른 손 위에 보조로 얹은 자세
     const openR = rs.index && rs.middle && rs.ring && rs.pinky;
     const openL = ls.index && ls.middle && ls.ring && ls.pinky;
+
+    const xDiff = Math.abs(rc.x - lc.x);
+    const yDiff = Math.abs(rc.y - lc.y);
+
+    // 디버그: 양손 감지 시 콘솔에 값 출력
+    console.log(`openR:${openR} openL:${openL} xDiff:${xDiff.toFixed(3)} yDiff:${yDiff.toFixed(3)}`);
+
     if (openR && openL) {
-      const yDiff = Math.abs(rc.y - lc.y);
-      const xDiff = Math.abs(rc.x - lc.x);
-      // 세로로 겹침: y 차이 있고 x는 가까이
-      if (yDiff > 0.08 && xDiff < 0.25) return "rasengan";
+      // 라센간: 양손 가까이, 세로로 엇갈린 자세
+      if (xDiff < 0.22 && yDiff > 0.08) return "rasengan";
+
+      // 풍둔나선수리검: 양손 좌우로 넓게 벌림 (맨 마지막에 체크)
+      if (xDiff > 0.25 && yDiff < 0.20) return "rasenshuriken";
     }
   }
 
@@ -112,15 +119,19 @@ function detectJutsu(right, left) {
 // 상태
 // ------------------------------------------------------
 const JUTSU_INFO = {
-  rasengan: { label: "螺旋丸 라센간",  color: "#5eb3ff" },
-  chidori:  { label: "千鳥 치도리",    color: "#c9f2ff" },
-  fireball: { label: "火遁 호화멸각",  color: "#ff8a2a" },
-  bunshin:  { label: "影分身 분신술",  color: "#e4d4ff" },
+  rasengan:       { label: "螺旋丸 라센간",        color: "#5eb3ff" },
+  chidori:        { label: "千鳥 치도리",           color: "#c9f2ff" },
+  fireball:       { label: "火遁 호화멸각",         color: "#ff8a2a" },
+  bunshin:        { label: "影分身 분신술",         color: "#e4d4ff" },
+  rasenshuriken:  { label: "風遁螺旋手裏剣 풍둔 나선 수리검", color: "#86efac" },
 };
+
+
 
 // 이펙트 위치 캐싱 (손이 순간적으로 사라져도 이펙트 유지)
 let lastRasenganPos = null;
 let lastChidoriPos = null;
+let lastRasenshurikenPos = null;
 
 const HOLD_DURATION_MS = 600; // 0.6초 홀딩
 const RESET_TOLERANCE = 10;   // null 또는 다른 제스처가 10프레임 연속이어야 리셋
@@ -133,12 +144,32 @@ let badFrames = 0;
 let activeEffect = null; // { type, start }
 let lastActivationEnd = 0;
 
+function loadSound(path, volume = 1.0) {
+  try {
+    const a = new Audio(path);
+    a.volume = volume;
+    return a;
+  } catch(e) { return null; }
+}
+
+const sndActivate    = loadSound("assets/sounds/jutsu_activate.mp3", 0.9);
+const sndBunshinVoice = loadSound("assets/sounds/bunshin_voice.mp3", 1.0);
+const sndBunshinClone = loadSound("assets/sounds/bunshin_clone.mp3", 0.85);
+
+function playSound(snd) {
+  if (!snd) return;
+  try { snd.currentTime = 0; snd.play(); } catch(e) {}
+}
+
 function activateJutsu(type) {
   const duration = type === "bunshin" ? BUNSHIN_EFFECT_DURATION : EFFECT_DURATION;
   activeEffect = { type, start: performance.now(), duration };
   lastRasenganPos = null;
   lastChidoriPos = null;
+  lastRasenshurikenPos = null;
   resetBunshinClones();
+  playSound(sndActivate);
+  if (type === "bunshin") playSound(sndBunshinVoice);
   const info = JUTSU_INFO[type];
   jutsuDisplay.textContent = info.label;
   jutsuDisplay.style.color = info.color;
@@ -184,12 +215,16 @@ state4Img.src = `${ASSETS_PATH}/state-4.png`;
 const state5Img = new Image(); // 치도리
 state5Img.src = `${ASSETS_PATH}/state-5.png`;
 
+const state6Img = new Image(); // 나선수리검
+state6Img.src = `${ASSETS_PATH}/state-6.png`;
+
 // 인술별 카드 이미지 매핑
 const JUTSU_STATE_IMG = {
-  bunshin:  state2Img,
-  rasengan: state3Img,
-  fireball: state4Img,
-  chidori:  state5Img,
+  bunshin:        state2Img,
+  rasengan:       state3Img,
+  fireball:       state4Img,
+  chidori:        state5Img,
+  rasenshuriken:  state6Img,
 };
 
 // 손동작 카드 이미지를 하단 중앙에 그리는 헬퍼 (분신술 기존 방식과 동일)
@@ -501,6 +536,292 @@ function drawChidori(cx, cy, radius, t) {
 }
 
 // ------------------------------------------------------
+// 시각 효과: 풍둔나선수리검 (강화판)
+// ------------------------------------------------------
+function drawRasenshuriken(cx, cy, radius, t) {
+  ctx.save();
+
+  const rotation = t * 0.028; // 회전 속도 약간 증가
+
+  // ── 1. 원거리 바람 오라 (더 넓고 강하게) ──
+  const outerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 4.0);
+  outerGrad.addColorStop(0,    "rgba(200,255,220,0.22)");
+  outerGrad.addColorStop(0.25, "rgba(100,240,170,0.14)");
+  outerGrad.addColorStop(0.55, "rgba(40,190,110,0.06)");
+  outerGrad.addColorStop(1,    "rgba(0,80,50,0)");
+  ctx.fillStyle = outerGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 4.0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ── 2. 충격파 맥동 링 (3개, 위상 다르게 — 더 강렬하게) ──
+  for (let w = 0; w < 3; w++) {
+    const wPhase = (w * Math.PI * 2) / 3;
+    const wR = radius * (2.0 + 0.65 * Math.sin(t * 0.009 + wPhase));
+    const wAlpha = 0.16 + 0.1 * Math.sin(t * 0.009 + wPhase);
+    const wGrad = ctx.createRadialGradient(cx, cy, wR * 0.86, cx, cy, wR * 1.10);
+    wGrad.addColorStop(0,   "rgba(140,255,180,0)");
+    wGrad.addColorStop(0.4, `rgba(190,255,215,${wAlpha})`);
+    wGrad.addColorStop(0.75,`rgba(80,220,140,${wAlpha * 0.5})`);
+    wGrad.addColorStop(1,   "rgba(20,160,80,0)");
+    ctx.fillStyle = wGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, wR * 1.10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── 3. 수리검 4날 (길고 날카로운 형태) ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.shadowColor = "#4ade80";
+  ctx.shadowBlur = 36;
+
+  const BLADES = 4;
+  for (let b = 0; b < BLADES; b++) {
+    ctx.save();
+    ctx.rotate((b * Math.PI * 2) / BLADES);
+
+    // 날 메인 그라디언트 — 뿌리(밝음) → 끝(투명)
+    const bladeGrad = ctx.createLinearGradient(radius * 0.20, 0, radius * 2.8, 0);
+    bladeGrad.addColorStop(0,    "rgba(255,255,255,1)");
+    bladeGrad.addColorStop(0.12, "rgba(210,255,225,0.97)");
+    bladeGrad.addColorStop(0.40, "rgba(100,230,160,0.80)");
+    bladeGrad.addColorStop(0.75, "rgba(30,180,100,0.35)");
+    bladeGrad.addColorStop(1,    "rgba(0,120,60,0)");
+    ctx.fillStyle = bladeGrad;
+
+    // 날 형태: 뿌리 좁음 → 중간 살짝 불룩 → 끝 뾰족
+    ctx.beginPath();
+    ctx.moveTo(radius * 0.20, 0);
+    ctx.bezierCurveTo(
+        radius * 0.50, -radius * 0.12,   // 초반 약간 벌어짐
+        radius * 1.60, -radius * 0.08,   // 중간 날씬하게 유지
+        radius * 2.80,  0                 // 끝 뾰족
+    );
+    ctx.bezierCurveTo(
+        radius * 1.60,  radius * 0.08,
+        radius * 0.50,  radius * 0.12,
+        radius * 0.20,  0
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // 날 중심 하이라이트선
+    ctx.strokeStyle = "rgba(240,255,245,0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(radius * 0.22, 0);
+    ctx.bezierCurveTo(
+        radius * 0.80, -radius * 0.03,
+        radius * 1.80, -radius * 0.02,
+        radius * 2.70,  0
+    );
+    ctx.stroke();
+
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // ── 4. 반대방향 잔상 4날 (반투명, 더 큰 각도 오프셋) ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-rotation * 0.55 + Math.PI / 4);
+  ctx.globalAlpha = 0.18;
+  ctx.shadowColor = "#86efac";
+  ctx.shadowBlur = 10;
+
+  for (let b = 0; b < BLADES; b++) {
+    ctx.save();
+    ctx.rotate((b * Math.PI * 2) / BLADES);
+    const bladeGrad2 = ctx.createLinearGradient(radius * 0.25, 0, radius * 1.9, 0);
+    bladeGrad2.addColorStop(0,   "rgba(160,255,200,0.85)");
+    bladeGrad2.addColorStop(0.5, "rgba(60,200,130,0.4)");
+    bladeGrad2.addColorStop(1,   "rgba(0,120,60,0)");
+    ctx.fillStyle = bladeGrad2;
+    ctx.beginPath();
+    ctx.moveTo(radius * 0.20, 0);
+    ctx.bezierCurveTo(
+        radius * 0.50, -radius * 0.11,
+        radius * 1.55, -radius * 0.07,
+        radius * 2.60,  0
+    );
+    ctx.bezierCurveTo(
+        radius * 1.55,  radius * 0.07,
+        radius * 0.50,  radius * 0.11,
+        radius * 0.20,  0
+    );
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // ── 5. 나선 바람 — 로그 나선(Logarithmic Spiral)으로 개선 ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.shadowColor = "#bbf7d0";
+  ctx.shadowBlur = 12;
+
+  const WIND_STRANDS = 18; // 가닥 수 증가
+  for (let k = 0; k < WIND_STRANDS; k++) {
+    const phase = rotation * 2.2 + (k * Math.PI * 2) / WIND_STRANDS;
+    const alpha = 0.22 + 0.18 * Math.sin(t * 0.018 + k * 0.7);
+    const grow = 0.28 + 0.04 * Math.sin(t * 0.012 + k); // 로그 나선 성장율
+
+    ctx.strokeStyle = k % 3 === 0
+        ? `rgba(220,255,235,${alpha})`
+        : k % 3 === 1
+            ? `rgba(150,240,190,${alpha * 0.75})`
+            : `rgba(80,200,140,${alpha * 0.5})`;
+    ctx.lineWidth = k % 3 === 0 ? 2.0 : 1.1;
+    ctx.beginPath();
+
+    const STEPS = 90;
+    for (let s = 0; s <= STEPS; s++) {
+      const frac = s / STEPS;
+      // 로그 나선: r = a * e^(b*θ)
+      const theta = phase + frac * Math.PI * 5.0; // 2.5바퀴
+      const r = radius * 0.22 * Math.exp(grow * frac * 2.5);
+      const clampR = Math.min(r, radius * 2.0); // 최대 반경 제한
+      const x = Math.cos(theta) * clampR;
+      const y = Math.sin(theta) * clampR;
+      if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // ── 6. 외곽 회전 링 (2개, 점선 추가) ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation * 0.4);
+  ctx.shadowColor = "#4ade80";
+  ctx.shadowBlur = 22;
+
+  // 바깥 실선 링
+  ctx.strokeStyle = "rgba(140,255,190,0.65)";
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 1.08, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 안쪽 점선 링 (회전 반대)
+  ctx.rotate(-rotation * 0.8);
+  ctx.strokeStyle = "rgba(100,240,160,0.4)";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([radius * 0.2, radius * 0.12]);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.72, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // ── 7. 중앙 코어 (압축된 풍둔 에너지, 십자 섬광 추가) ──
+  // 코어 그라디언트
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.58);
+  coreGrad.addColorStop(0,    "rgba(255,255,255,1)");
+  coreGrad.addColorStop(0.2,  "rgba(230,255,240,0.98)");
+  coreGrad.addColorStop(0.55, "rgba(110,235,165,0.85)");
+  coreGrad.addColorStop(0.85, "rgba(30,160,90,0.3)");
+  coreGrad.addColorStop(1,    "rgba(0,100,50,0)");
+  ctx.fillStyle = coreGrad;
+  ctx.shadowColor = "#4ade80";
+  ctx.shadowBlur = 35;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.58, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 코어 십자 섬광 (풍둔 에너지 방출 느낌)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation * 3.0);
+  const flashA = 0.55 + 0.45 * Math.sin(t * 0.045);
+  for (let c = 0; c < 4; c++) {
+    ctx.save();
+    ctx.rotate((c * Math.PI) / 2);
+    const beamGrad = ctx.createLinearGradient(0, 0, radius * 0.55, 0);
+    beamGrad.addColorStop(0,   `rgba(255,255,255,${flashA})`);
+    beamGrad.addColorStop(0.4, `rgba(200,255,225,${flashA * 0.6})`);
+    beamGrad.addColorStop(1,   "rgba(100,230,160,0)");
+    ctx.fillStyle = beamGrad;
+    ctx.fillRect(0, -radius * 0.04, radius * 0.55, radius * 0.08);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // ── 8. 궤도 바람 입자 (3레이어 — 다른 속도/반경으로 역동성 증가) ──
+  ctx.shadowColor = "#d1fae5";
+  ctx.shadowBlur = 16;
+
+  // 레이어 1: 바깥 (빠른 회전)
+  for (let i = 0; i < 14; i++) {
+    const angle = rotation * 2.8 + (i * Math.PI * 2) / 14;
+    const orbitR = radius * (0.92 + Math.sin(t * 0.022 + i * 0.65) * 0.14);
+    const size = 2.5 + Math.sin(t * 0.035 + i) * 0.8;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * orbitR, cy + Math.sin(angle) * orbitR,
+        Math.max(0.5, size), 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(210,255,230,${0.8 + 0.2 * Math.sin(t * 0.03 + i)})`;
+    ctx.fill();
+  }
+  // 레이어 2: 중간 (반대 방향)
+  for (let i = 0; i < 9; i++) {
+    const angle = -rotation * 1.8 + (i * Math.PI * 2) / 9;
+    const orbitR = radius * (0.60 + Math.sin(t * 0.028 + i * 0.9) * 0.09);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * orbitR, cy + Math.sin(angle) * orbitR,
+        1.8, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(170,255,200,0.85)";
+    ctx.fill();
+  }
+  // 레이어 3: 안쪽 (빠른 반대 회전, 작은 입자)
+  for (let i = 0; i < 6; i++) {
+    const angle = rotation * 4.5 + (i * Math.PI * 2) / 6;
+    const orbitR = radius * (0.32 + Math.sin(t * 0.04 + i * 1.2) * 0.05);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(angle) * orbitR, cy + Math.sin(angle) * orbitR,
+        1.2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(240,255,245,0.9)";
+    ctx.fill();
+  }
+
+  // ── 9. 비산 바람 파편 (날 끝에서 튀어나오는 잔상) ──
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.shadowColor = "#86efac";
+  ctx.shadowBlur = 8;
+  const DEBRIS = 20;
+  for (let i = 0; i < DEBRIS; i++) {
+    // 날 방향(0, 90, 180, 270도) 근처에서 방출
+    const bladeAngle = (Math.floor(i / 5) * Math.PI / 2) + rotation;
+    const spreadAngle = bladeAngle + (Math.random() - 0.5) * 0.7;
+    const dist = radius * (1.1 + Math.sin(t * 0.03 + i * 0.4) * 0.3 + (i % 5) * 0.22);
+    const px = Math.cos(spreadAngle) * dist;
+    const py = Math.sin(spreadAngle) * dist;
+    const alpha = 0.6 * (1 - (i % 5) * 0.15);
+    ctx.beginPath();
+    ctx.arc(px, py, 1.5 - (i % 5) * 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(180,255,210,${alpha})`;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // ── 10. 중심 극점 플래시 ──
+  const flashFinal = 0.5 + 0.5 * Math.sin(t * 0.05);
+  const flashGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.20);
+  flashGrad.addColorStop(0, `rgba(255,255,255,${flashFinal})`);
+  flashGrad.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = flashGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.20, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ------------------------------------------------------
 // 시각 효과: 호화멸각 (화염)
 // ------------------------------------------------------
 const fireParticles = [];
@@ -626,6 +947,7 @@ const customClones = [
   { x: -280, y: 100, scale: 0.4,  delay: 3400, smokeSpawned: false },
 ];
 const BUNSHIN_EFFECT_DURATION = 5000;
+let cloneSoundPlayed = false;
 
 function drawBunshinClones(person, elapsed) {
   const sorted = [...customClones].sort((a, b) => b.delay - a.delay);
@@ -633,6 +955,10 @@ function drawBunshinClones(person, elapsed) {
     if (elapsed < cl.delay) return;
     if (!cl.smokeSpawned) {
       cl.smokeSpawned = true;
+      if (!cloneSoundPlayed) {
+        cloneSoundPlayed = true;
+        playSound(sndBunshinClone);
+      }
       const centerX = cl.x + canvas.width / 2;
       const centerY = cl.y + canvas.height / 2 - 40;
       spawnSpriteSmoke(centerX - 15, centerY, cl.scale);
@@ -648,6 +974,7 @@ function drawBunshinClones(person, elapsed) {
 }
 
 function resetBunshinClones() {
+  cloneSoundPlayed = false;
   customClones.forEach(cl => cl.smokeSpawned = false);
   activeSpriteSmokes.length = 0;
 }
@@ -682,6 +1009,79 @@ function drawHandSkeleton(lm, color) {
     ctx.fill();
   });
   ctx.restore();
+}
+
+// ------------------------------------------------------
+// 나선수리검 추가 비주얼
+// ------------------------------------------------------
+
+// 차징 중 손 사이에서 바람 수렴 파티클
+function drawChargingWind(right, left, ratio, now) {
+  const rc = palmCenter(right);
+  const lc = palmCenter(left);
+  const cx = (1 - (rc.x + lc.x) / 2) * canvas.width;
+  const cy = ((rc.y + lc.y) / 2) * canvas.height;
+  const maxR = 80 * ratio;
+  ctx.save();
+  for (let i = 0; i < 10; i++) {
+    const angle = (i * Math.PI * 2) / 10 + now * 0.004;
+    const dist = maxR * (1 - ratio * 0.4);
+    const px = cx + Math.cos(angle) * dist;
+    const py = cy + Math.sin(angle) * dist;
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5 * ratio, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(160,255,200,${ratio * 0.85})`;
+    ctx.shadowColor = '#86efac';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// 발동 순간 연두빛 화이트아웃 플래시
+function drawActivationFlash(elapsed) {
+  if (elapsed > 160) return;
+  const alpha = (1 - elapsed / 160) * 0.78;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#d1fae5';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
+// 블레이드 트레일 (날 끝 잔상)
+const bladeTrails = Array.from({ length: 4 }, () => []);
+const TRAIL_MAX = 14;
+
+function updateBladeTrails(cx, cy, radius, rotation) {
+  for (let b = 0; b < 4; b++) {
+    const angle = rotation + (b * Math.PI * 2) / 4;
+    bladeTrails[b].push({ x: cx + Math.cos(angle) * radius * 2.15, y: cy + Math.sin(angle) * radius * 2.15 });
+    if (bladeTrails[b].length > TRAIL_MAX) bladeTrails[b].shift();
+  }
+}
+
+function drawBladeTrails() {
+  for (let b = 0; b < 4; b++) {
+    const trail = bladeTrails[b];
+    if (trail.length < 2) continue;
+    for (let i = 1; i < trail.length; i++) {
+      const alpha = (i / trail.length) * 0.55;
+      const width = (i / trail.length) * 3.5;
+      ctx.beginPath();
+      ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+      ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.strokeStyle = `rgba(150,255,190,${alpha})`;
+      ctx.lineWidth = width;
+      ctx.shadowColor = '#86efac';
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+    }
+  }
+}
+
+function clearBladeTrails() {
+  bladeTrails.forEach(t => t.length = 0);
 }
 
 // ------------------------------------------------------
@@ -760,6 +1160,49 @@ function renderActiveEffect(res, now) {
     return; // ← 조기 리턴으로 맨 끝 공통 drawStateImg 중복 방지
   }
 
+  else if (activeEffect.type === "rasenshuriken") {
+    if (right && left) {
+      const rp = palmCenter(right);
+      const lp = palmCenter(left);
+      lastRasenshurikenPos = {
+        cx: (1 - (rp.x + lp.x) / 2) * canvas.width,
+        cy: ((rp.y + lp.y) / 2) * canvas.height,
+        radius: Math.max(95, dist2D(rp, lp) * canvas.width * 0.75),
+      };
+    } else if (right || left) {
+      const p = palmCenter(right || left);
+      lastRasenshurikenPos = {
+        cx: (1 - p.x) * canvas.width,
+        cy: p.y * canvas.height,
+        radius: 110,
+      };
+    }
+    if (lastRasenshurikenPos) {
+      const { cx, cy, radius } = lastRasenshurikenPos;
+      const pulse = 1 + Math.sin(now * 0.006) * 0.08;
+      const r = radius * pulse;
+      const fade = progress > 0.85 ? (1 - progress) / 0.15 : 1;
+
+      // 화면 흔들림 (발동 초반 1.2초)
+      const shakeStr = elapsed < 1200 ? (4 * (1 - elapsed / 1200)) : 0;
+      const shakeX = (Math.random() - 0.5) * shakeStr;
+      const shakeY = (Math.random() - 0.5) * shakeStr;
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+
+      // 블레이드 트레일 업데이트 & 드로우
+      updateBladeTrails(cx, cy, r, now * 0.022);
+      drawBladeTrails();
+
+      ctx.globalAlpha = fade;
+      drawRasenshuriken(cx, cy, r, now);
+      ctx.restore();
+
+      // 발동 플래시
+      drawActivationFlash(elapsed);
+    }
+  }
+
   else if (activeEffect.type === "bunshin") {
     ctx.save();
     ctx.scale(-1, 1);
@@ -826,6 +1269,7 @@ holistic.onResults(res => {
   // 이펙트 종료 체크
   if (activeEffect && (now - activeEffect.start >= activeEffect.duration)) {
     lastActivationEnd = now;
+    if (activeEffect.type === 'rasenshuriken') clearBladeTrails();
     activeEffect = null;
   }
 
@@ -835,7 +1279,12 @@ holistic.onResults(res => {
     if (detected && detected === currentDetecting) {
       badFrames = 0;
       const elapsed = now - holdStartTime;
-      updateUIProgress(detected, elapsed / HOLD_DURATION_MS);
+      const ratio = elapsed / HOLD_DURATION_MS;
+      updateUIProgress(detected, ratio);
+      // 나선수리검 차징 비주얼
+      if (detected === 'rasenshuriken' && right && left) {
+        drawChargingWind(right, left, ratio, now);
+      }
       if (elapsed >= HOLD_DURATION_MS) {
         activateJutsu(detected);
         currentDetecting = null;
