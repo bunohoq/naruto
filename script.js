@@ -108,8 +108,8 @@ function detectJutsu(right, left) {
     const thumbIn = !s.thumb;
     const pc = palmCenter(only);
     // 중지 끝이 중지 MCP보다 아래 → 손끝이 아래 방향
-    const fingersPointDown = only[12].y > only[9].y;
-    if (allOut && thumbIn && fingersPointDown && pc.y > 0.68) return "chidori";
+    const fingersPointDown = only[12].y > only[9].y - 0.04; // 약간 완화
+    if (allOut && thumbIn && fingersPointDown && pc.y > 0.52) return "chidori";
   }
 
   return null;
